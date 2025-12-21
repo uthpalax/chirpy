@@ -1,59 +1,75 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/joho/godotenv"
+	"github.com/utphalax/chirpy/internal/database"
+
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
-  fileserverHits atomic.Int32
+	fileserverHits atomic.Int32
+	db             *database.Queries
+	platform       string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    cfg.fileserverHits.Add(1)
-    next.ServeHTTP(w, r)
-  })
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg.fileserverHits.Add(1)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, r *http.Request) {
-  w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-  w.WriteHeader(http.StatusOK)
-  hits := fmt.Sprintf("Hits: %d", cfg.fileserverHits.Load())
-  w.Write([]byte(hits))
-}
-
-func (cfg *apiConfig) handleReset(w http.ResponseWriter, r *http.Request) {
-  w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-  w.WriteHeader(http.StatusOK)
-  cfg.fileserverHits.Store(0)
-  w.Write([]byte("Hits reset to 0"))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	hits := fmt.Sprintf("<html><body><h1>Welcome, Chirpy Admin</h1><p>Chirpy has been visited %d times!</p></body></html>", cfg.fileserverHits.Load())
+	w.Write([]byte(hits))
 }
 
 func main() {
-  mux := http.NewServeMux()
+	godotenv.Load()
 
-  apiConfig := &apiConfig{}
+	dbURL := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
 
-  handler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("cannot connect to database")
+	}
 
-  mux.Handle("/app/", apiConfig.middlewareMetricsInc(handler))
+	dbQueries := database.New(db)
 
-  mux.HandleFunc("/healthz", handleRediness)
-  mux.HandleFunc("/metrics", apiConfig.handleMetrics)
-  mux.HandleFunc("/reset", apiConfig.handleReset)
+	mux := http.NewServeMux()
 
-  server := http.Server {
-    Addr: ":8080",
-    Handler: mux,
-  }
+	apiConfig := &apiConfig{}
+	apiConfig.db = dbQueries
+	apiConfig.platform = platform
 
-  server.ListenAndServe()
-}
+	handler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
 
-func handleRediness(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte(http.StatusText(http.StatusOK)))
+	mux.Handle("/app/", apiConfig.middlewareMetricsInc(handler))
+
+	mux.HandleFunc("GET /api/healthz", handleRediness)
+	mux.HandleFunc("GET /admin/metrics", apiConfig.handleMetrics)
+	mux.HandleFunc("POST /admin/reset", apiConfig.handleReset)
+	mux.HandleFunc("POST /api/users", apiConfig.handleCreateUser)
+	mux.HandleFunc("POST /api/login", apiConfig.handleLogin)
+	mux.HandleFunc("POST /api/chirps", apiConfig.handleCreateChirps)
+	mux.HandleFunc("GET /api/chirps", apiConfig.handleGetChirps)
+	mux.HandleFunc("GET /api/chirps/{id}", apiConfig.handleGetChirp)
+
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	server.ListenAndServe()
 }
