@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/utphalax/chirpy/internal/auth"
 	"github.com/utphalax/chirpy/internal/database"
 )
 
@@ -19,14 +20,30 @@ type Chirp struct {
 }
 
 func (cfg *apiConfig) handleCreateChirps(w http.ResponseWriter, r *http.Request) {
+	
+
+	token, bearerErr := auth.GetBearerToken(r.Header)
+	if bearerErr != nil {
+		responseWithError(w, 401, "Unauthorized", bearerErr)
+		return
+	}
+
+	userId, authErr := auth.ValidateJWT(token, cfg.jwtSecret)
+
+	if authErr != nil {
+		responseWithError(w, 401, "Unauthorized", authErr)
+		return
+	}
+
 	type parameters struct {
 		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
+
 	err := decoder.Decode(&params)
+
 	if err != nil {
 		responseWithError(w, 500, "Something went wrong", err)
 		return
@@ -57,7 +74,7 @@ func (cfg *apiConfig) handleCreateChirps(w http.ResponseWriter, r *http.Request)
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   sanitizedBody,
-		UserID: params.UserID,
+		UserID: userId,
 	})
 	if err != nil {
 		responseWithError(w, 500, "Cound not create chirp", err)

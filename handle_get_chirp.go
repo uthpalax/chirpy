@@ -12,6 +12,7 @@ func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		responseWithError(w, 400, "Invalid chirp ID format", err)
+		return
 	}
 
 	dbChirp, err := cfg.db.GetChirp(r.Context(), id)

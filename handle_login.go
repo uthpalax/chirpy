@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/utphalax/chirpy/internal/auth"
 )
@@ -11,10 +12,12 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		ExpiresInSeconds int   `json:"expires_in_seconds"` // in seconds
 	}
 
 	type response struct {
 		User
+		Token string `json:"token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -42,10 +45,20 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseWithJSON(w, 200, response{User: User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	}})
+	expiresInSeconds := 3600 // default 1 hour
+	if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < expiresInSeconds {
+		expiresInSeconds = params.ExpiresInSeconds
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresInSeconds)*time.Second)
+
+	responseWithJSON(w, 200, response{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token: token,
+	})
 }
