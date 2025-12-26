@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/utphalax/chirpy/internal/auth"
 )
 
@@ -50,7 +51,13 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		expiresInSeconds = params.ExpiresInSeconds
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresInSeconds)*time.Second)
+	userID, err := uuid.Parse(user.ID)
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "Invalid user ID", err)
+		return
+	}
+
+	token, err := auth.MakeJWT(userID, cfg.jwtSecret, time.Duration(expiresInSeconds)*time.Second)
 
 	responseWithJSON(w, 200, response{
 		User: User{

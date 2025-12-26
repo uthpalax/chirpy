@@ -6,20 +6,27 @@ package database
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Chirp struct {
-	ID        uuid.UUID
+	ID        string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Body      string
-	UserID    uuid.UUID
+	UserID    string
+}
+
+type RefreshToken struct {
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID    string
+	ExpiresAt time.Time
+	RevokedAt interface{}
 }
 
 type User struct {
-	ID             uuid.UUID
+	ID             string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Email          string

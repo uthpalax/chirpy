@@ -7,23 +7,31 @@ package database
 
 import (
 	"context"
-
-	"github.com/google/uuid"
+	"time"
 )
 
 const createChirp = `-- name: CreateChirp :one
 INSERT INTO chirps (id, created_at, updated_at, body, user_id)
-VALUES (gen_random_uuid(), NOW(), NOW(), $1, $2)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id, created_at, updated_at, body, user_id
 `
 
 type CreateChirpParams struct {
-	Body   string
-	UserID uuid.UUID
+	ID        string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Body      string
+	UserID    string
 }
 
 func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chirp, error) {
-	row := q.db.QueryRowContext(ctx, createChirp, arg.Body, arg.UserID)
+	row := q.db.QueryRowContext(ctx, createChirp,
+		arg.ID,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Body,
+		arg.UserID,
+	)
 	var i Chirp
 	err := row.Scan(
 		&i.ID,
@@ -36,10 +44,10 @@ func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chirp
 }
 
 const getChirp = `-- name: GetChirp :one
-SELECT id, created_at, updated_at, body, user_id FROM chirps WHERE id = $1
+SELECT id, created_at, updated_at, body, user_id FROM chirps WHERE id = ?
 `
 
-func (q *Queries) GetChirp(ctx context.Context, id uuid.UUID) (Chirp, error) {
+func (q *Queries) GetChirp(ctx context.Context, id string) (Chirp, error) {
 	row := q.db.QueryRowContext(ctx, getChirp, id)
 	var i Chirp
 	err := row.Scan(
