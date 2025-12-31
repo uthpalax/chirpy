@@ -7,17 +7,56 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+const createRefreshToken = `-- name: CreateRefreshToken :one
+INSERT INTO refresh_tokens (token, created_at, updated_at, user_id, expires_at, revoked_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
+`
+
+type CreateRefreshTokenParams struct {
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
+}
+
+func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, createRefreshToken,
+		arg.Token,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.UserID,
+		arg.ExpiresAt,
+		arg.RevokedAt,
+	)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, email, hashed_password)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, created_at, updated_at, email, hashed_password
 `
 
 type CreateUserParams struct {
-	ID             string
+	ID             uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Email          string
@@ -43,8 +82,26 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getRefreshToken = `-- name: GetRefreshToken :one
+SELECT token, created_at, updated_at, user_id, expires_at, revoked_at FROM refresh_tokens WHERE token = $1
+`
+
+func (q *Queries) GetRefreshToken(ctx context.Context, token string) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, getRefreshToken, token)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, created_at, updated_at, email, hashed_password from users WHERE email = ?
+SELECT id, created_at, updated_at, email, hashed_password from users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -56,6 +113,33 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+	)
+	return i, err
+}
+
+const revokeRefreshToken = `-- name: RevokeRefreshToken :one
+UPDATE refresh_tokens
+SET revoked_at = $1, updated_at = $2
+WHERE token = $3
+RETURNING token, created_at, updated_at, user_id, expires_at, revoked_at
+`
+
+type RevokeRefreshTokenParams struct {
+	RevokedAt sql.NullTime
+	UpdatedAt time.Time
+	Token     string
+}
+
+func (q *Queries) RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) (RefreshToken, error) {
+	row := q.db.QueryRowContext(ctx, revokeRefreshToken, arg.RevokedAt, arg.UpdatedAt, arg.Token)
+	var i RefreshToken
+	err := row.Scan(
+		&i.Token,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }

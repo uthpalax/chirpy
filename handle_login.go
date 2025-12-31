@@ -1,12 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/utphalax/chirpy/internal/auth"
+	"github.com/utphalax/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -19,6 +20,7 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	type response struct {
 		User
 		Token string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -51,13 +53,30 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		expiresInSeconds = params.ExpiresInSeconds
 	}
 
-	userID, err := uuid.Parse(user.ID)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresInSeconds)*time.Second)
 	if err != nil {
-		responseWithError(w, http.StatusInternalServerError, "Invalid user ID", err)
+		responseWithError(w, http.StatusInternalServerError, "Could not create JWT token", err)
 		return
 	}
 
-	token, err := auth.MakeJWT(userID, cfg.jwtSecret, time.Duration(expiresInSeconds)*time.Second)
+	refreshToken := auth.MakeRefreshToken()
+	// store the refreshtoken in the database
+	now := time.Now()
+	refreshTokenExpiresAt := now.Add(60 * 24 * time.Hour) // 7 days
+
+	_, err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refreshToken,
+		CreatedAt: now,
+		UpdatedAt: now,
+		UserID:    user.ID,
+		ExpiresAt: refreshTokenExpiresAt,
+		RevokedAt: sql.NullTime{Valid: false},
+	})
+
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "Could not create refresh token", err)
+		return
+	}
 
 	responseWithJSON(w, 200, response{
 		User: User{
@@ -67,5 +86,6 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 			Email:     user.Email,
 		},
 		Token: token,
+		RefreshToken: refreshToken,
 	})
 }

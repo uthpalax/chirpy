@@ -12,11 +12,11 @@ import (
 )
 
 type Chirp struct {
-	ID        string `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Body      string    `json:"body"`
-	UserID    string `json:"user_id"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func (cfg *apiConfig) handleCreateChirps(w http.ResponseWriter, r *http.Request) {
@@ -74,11 +74,11 @@ func (cfg *apiConfig) handleCreateChirps(w http.ResponseWriter, r *http.Request)
 
 	now := time.Now()
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
-		ID:        uuid.New().String(),
+		ID:        uuid.New(),
 		CreatedAt: now,
 		UpdatedAt: now,
 		Body:      sanitizedBody,
-		UserID:    userId.String(),
+		UserID:    userId,
 	})
 	if err != nil {
 		responseWithError(w, 500, "Cound not create chirp", err)

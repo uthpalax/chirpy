@@ -9,14 +9,14 @@ import (
 func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 
-	// Validate UUID format
-	_, err := uuid.Parse(idStr)
+	// Validate and parse UUID
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		responseWithError(w, 400, "Invalid chirp ID format", err)
 		return
 	}
 
-	dbChirp, err := cfg.db.GetChirp(r.Context(), idStr)
+	dbChirp, err := cfg.db.GetChirp(r.Context(), id)
 	if err != nil {
 		responseWithError(w, 404, "Could not fetch or find chirp", err)
 		return

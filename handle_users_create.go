@@ -11,7 +11,7 @@ import (
 )
 
 type User struct {
-	ID        string `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
@@ -43,7 +43,7 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	payload := database.CreateUserParams{
-		ID:             uuid.New().String(),
+		ID:             uuid.New(),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		Email:          params.Email,
